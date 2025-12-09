@@ -1,6 +1,0 @@
-[submodule "api"]
-	path = api
-	url = git@gitlab.com:fjc-2025/findnest/api.git
-[submodule "website"]
-	path = website
-	url = git@gitlab.com:fjc-2025/findnest/website.git
