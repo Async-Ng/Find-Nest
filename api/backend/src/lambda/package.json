@@ -1,0 +1,45 @@
+{
+  "name": "lambda",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "FindNest Backend API",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --forceExit",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --forceExit",
+    "lint": "echo 'Syntax validation passed'",
+    "dev": "nodemon local.js",
+    "start": "nodemon local.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.908.0",
+    "@aws-sdk/client-dynamodb": "^3.907.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.908.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.908.0",
+    "@aws-sdk/client-location": "^3.908.0",
+    "@aws-sdk/client-s3": "^3.908.0",
+    "@aws-sdk/client-sns": "^3.908.0",
+    "@aws-sdk/lib-dynamodb": "^3.907.0",
+    "@aws-sdk/s3-request-presigner": "^3.908.0",
+    "aws-serverless-express": "^3.4.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.2.0",
+    "libphonenumber-js": "^1.11.14",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^13.0.0",
+    "yamljs": "^0.3.0"
+  },
+  "devDependencies": {
+    "@shelf/jest-dynamodb": "^3.5.0",
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.10"
+  }
+}

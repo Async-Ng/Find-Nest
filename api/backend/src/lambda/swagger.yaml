@@ -1,0 +1,2310 @@
+openapi: 3.0.3
+info:
+  title: FindNest API - Optimized
+  description: |
+    API tối ưu cho hệ thống tìm kiếm phòng trọ thông minh FindNest
+
+    ## 3 Loại người dùng:
+
+    ### 1. Người dùng (Users) - Tìm phòng:
+    - Đăng nhập: Phone + OTP (tự động tạo tài khoản)
+    - Quyền: Xem danh sách phòng, tìm kiếm, xem chi tiết, lưu yêu thích
+    - Liên hệ: Gửi yêu cầu hỗ trợ, góp ý, báo lỗi
+
+    ### 2. Chủ trọ (Landlords) - Đăng tin:
+    - Đăng nhập: Phone + OTP, sau đó admin cấp quyền landlord
+    - Quyền: Tạo, sửa, xóa tin đăng phòng trọ, upload hình ảnh
+
+    ### 3. Quản trị viên (Admins) - Quản lý:
+    - Đăng nhập: Username + Password
+    - Quyền: Quản lý toàn hệ thống, xử lý yêu cầu hỗ trợ
+
+    ## Tính năng chính:
+    - Tìm kiếm thông minh bằng AI với ngôn ngữ tự nhiên
+    - Giao diện bản đồ tương tác (Google Maps style)
+    - Lọc theo vị trí và khoảng cách
+    - Cá nhân hóa dựa trên favorites và profile
+    - Hệ thống thông báo thông minh
+    - Quản lý quyền người dùng
+
+  version: 3.0.0
+  contact:
+    name: FindNest Team
+    email: admin@findnest.com
+
+servers:
+  - url: https://k0qsj9xb67.execute-api.us-east-1.amazonaws.com/prod
+    description: Production server
+  - url: http://localhost:3001
+    description: Local development server
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Listings
+    description: Boarding house listings management
+  - name: Profile
+    description: User profile management
+  - name: Admin
+    description: Admin user management
+  - name: Favorites
+    description: User favorites management
+  - name: Images
+    description: Image upload and management
+  - name: Location
+    description: Location services and geocoding
+  - name: AI
+    description: AI-powered room recommendations
+  - name: Support
+    description: User support and feedback system
+  - name: Notifications
+    description: User notifications management
+  - name: Landlord
+    description: Landlord-specific features and tools
+  - name: Analytics
+    description: System analytics and reporting
+
+paths:
+  /:
+    get:
+      tags: [Health]
+      summary: Swagger UI
+      responses:
+        "200":
+          description: Swagger UI page
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        "200":
+          description: API đang hoạt động
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ============================================================================
+  # AUTHENTICATION ENDPOINTS
+  # ============================================================================
+
+  /auth/send-otp:
+    post:
+      tags: [Authentication]
+      summary: Gửi OTP qua SMS (Bước 1/2)
+      description: |
+        **Quy trình đăng nhập/đăng ký bằng Phone + OTP:**
+        1. **Bước này**: Gửi OTP qua SMS
+        2. **Bước tiếp theo**: Gọi `/auth/verify-otp` để xác thực OTP và tự động tạo tài khoản nếu lần đầu
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phoneNumber]
+              properties:
+                phoneNumber:
+                  type: string
+                  description: Số điện thoại Việt Nam (+84xxxxxxxxx hoặc 0xxxxxxxxx)
+                  example: "+84987654321"
+      responses:
+        "200":
+          description: OTP đã được gửi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "OTP sent successfully. If this is your first time, an account will be created automatically."
+                  expiresIn:
+                    type: integer
+                    description: Thời gian hết hạn OTP (giây)
+                    example: 300
+                  phoneNumber:
+                    type: string
+                    example: "+84987654321"
+                  otp:
+                    type: string
+                    description: Mã OTP 6 chữ số (chỉ hiển thị khi SNS quota exceeded - sẽ bỏ khi production)
+                    example: "123456"
+        "400":
+          description: Số điện thoại không hợp lệ
+        "429":
+          description: Gửi OTP quá nhanh
+
+  /auth/verify-otp:
+    post:
+      tags: [Authentication]
+      summary: Xác thực OTP và đăng nhập/đăng ký (Bước 2/2)
+      description: |
+        **Quy trình đăng nhập/đăng ký bằng Phone + OTP:**
+        1. **Bước trước**: Đã gọi `/auth/send-otp` để nhận OTP
+        2. **Bước này**: Xác thực OTP, tự động tạo tài khoản nếu lần đầu, và nhận tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phoneNumber, otp]
+              properties:
+                phoneNumber:
+                  type: string
+                  example: "+84987654321"
+                otp:
+                  type: string
+                  pattern: "^[0-9]{6}$"
+                  description: Mã OTP 6 chữ số
+                  example: "123456"
+      responses:
+        "200":
+          description: Xác thực thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Welcome! Your account has been created successfully."
+                  isNewUser:
+                    type: boolean
+                    example: true
+                  accessToken:
+                    type: string
+                    description: JWT access token
+                  refreshToken:
+                    type: string
+                    description: JWT refresh token
+                  idToken:
+                    type: string
+                    description: JWT ID token
+                  expiresIn:
+                    type: integer
+                    description: Token expiry time in seconds
+                    example: 1800
+                  tokenType:
+                    type: string
+                    example: "Bearer"
+                  user:
+                    $ref: "#/components/schemas/UserProfile"
+        "400":
+          description: OTP không đúng hoặc hết hạn
+
+  /auth/admin/login:
+    post:
+      tags: [Authentication]
+      summary: Đăng nhập admin
+      description: Xác thực admin bằng username và password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  example: "Admin@123"
+      responses:
+        "200":
+          description: Đăng nhập admin thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Thông tin đăng nhập không đúng
+        "403":
+          description: Không có quyền admin
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Làm mới access token
+      description: Sử dụng refresh token để lấy access token mới
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token từ response đăng nhập
+      responses:
+        "200":
+          description: Token đã được làm mới
+        "401":
+          description: Refresh token không hợp lệ
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Đăng xuất
+      description: Đăng xuất và vô hiệu hóa tất cả tokens
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Đăng xuất thành công
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Lấy thông tin user hiện tại
+      description: Lấy profile của user đang đăng nhập
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Thông tin user
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ============================================================================
+  # LISTINGS ENDPOINTS
+  # ============================================================================
+
+  /listings:
+    get:
+      tags: [Listings]
+      summary: Lấy danh sách phòng trọ (Tích hợp tất cả tính năng)
+      description: |
+        Lấy danh sách tất cả phòng trọ với khả năng:
+        - Lọc theo quận/huyện, giá, diện tích, tiện ích
+        - Tìm kiếm theo tên
+        - Lọc theo khoảng cách từ vị trí
+        - Gợi ý AI
+        - Chế độ xem bản đồ
+
+        **Public endpoint** - Không cần đăng nhập
+      parameters:
+        - name: district
+          in: query
+          description: Lọc theo quận/huyện
+          schema:
+            type: string
+            enum:
+              - "Quận 1"
+              - "Quận 2"
+              - "Quận 3"
+              - "Quận 4"
+              - "Quận 5"
+              - "Quận 6"
+              - "Quận 7"
+              - "Quận 8"
+              - "Quận 9"
+              - "Quận 10"
+              - "Quận 11"
+              - "Quận 12"
+              - "Quận Bình Thạnh"
+              - "Quận Gò Vấp"
+              - "Quận Phú Nhuận"
+              - "Quận Tân Bình"
+              - "Quận Tân Phú"
+              - "Quận Bình Tân"
+              - "Thành phố Thủ Đức"
+              - "Huyện Hóc Môn"
+              - "Huyện Củ Chi"
+              - "Huyện Bình Chánh"
+              - "Huyện Nhà Bè"
+              - "Huyện Cần Giờ"
+            example: "Quận 1"
+        - name: minPrice
+          in: query
+          description: Giá tối thiểu (VND)
+          schema:
+            type: integer
+            example: 2000000
+        - name: maxPrice
+          in: query
+          description: Giá tối đa (VND)
+          schema:
+            type: integer
+            example: 5000000
+        - name: minArea
+          in: query
+          description: Diện tích tối thiểu (m²)
+          schema:
+            type: integer
+            example: 20
+        - name: search
+          in: query
+          description: Tìm kiếm theo tên phòng trọ
+          schema:
+            type: string
+            example: "phòng đẹp"
+        - name: amenities
+          in: query
+          description: Lọc theo tiện ích (phân cách bằng dấu phẩy)
+          schema:
+            type: string
+            example: "WiFi,Điều hòa,Tủ lạnh"
+          style: form
+          explode: false
+        - name: lat
+          in: query
+          description: Vĩ độ của vị trí người dùng (để lọc theo khoảng cách)
+          schema:
+            type: number
+            example: 10.7769
+        - name: lng
+          in: query
+          description: Kinh độ của vị trí người dùng (để lọc theo khoảng cách)
+          schema:
+            type: number
+            example: 106.7009
+        - name: radius
+          in: query
+          description: Bán kính tìm kiếm (km)
+          schema:
+            type: number
+            enum: [1, 2, 5, 10, 15, 20]
+            example: 5
+        - name: view
+          in: query
+          description: Chế độ xem
+          schema:
+            type: string
+            enum: ["list", "map", "grid"]
+            default: "list"
+            example: "map"
+        - name: recommendations
+          in: query
+          description: Lấy gợi ý AI (true/false)
+          schema:
+            type: string
+            enum: ["true", "false"]
+            example: "true"
+        - name: bounds
+          in: query
+          description: Giới hạn bản đồ cho view=map (lat1,lng1,lat2,lng2)
+          schema:
+            type: string
+            example: "10.7,106.6,10.8,106.8"
+      responses:
+        "200":
+          description: Danh sách phòng trọ
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Listing"
+
+    post:
+      tags: [Listings]
+      summary: Tạo tin đăng mới
+      description: |
+        Tạo tin đăng phòng trọ mới
+
+        **Yêu cầu quyền:** Chỉ Landlords hoặc Admins
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateListingRequest"
+      responses:
+        "201":
+          description: Tạo tin đăng thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Listing"
+        "400":
+          description: Dữ liệu không hợp lệ
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Không có quyền tạo tin đăng
+
+  /listings/{listingId}:
+    get:
+      tags: [Listings]
+      summary: Lấy chi tiết phòng trọ
+      description: |
+        Lấy thông tin chi tiết của một phòng trọ
+
+        **Public endpoint** - Không cần đăng nhập
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          description: ID của tin đăng
+          schema:
+            type: string
+            example: "12345678-1234-1234-1234-123456789012"
+      responses:
+        "200":
+          description: Chi tiết phòng trọ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Listing"
+        "404":
+          description: Không tìm thấy tin đăng
+
+    put:
+      tags: [Listings]
+      summary: Cập nhật tin đăng
+      description: |
+        Cập nhật thông tin tin đăng phòng trọ
+
+        **Yêu cầu quyền:** Chỉ chủ sở hữu tin đăng hoặc Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          description: ID của tin đăng
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateListingRequest"
+      responses:
+        "200":
+          description: Cập nhật thành công
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Listing"
+        "400":
+          description: Dữ liệu không hợp lệ
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Không có quyền cập nhật tin đăng này
+        "404":
+          description: Không tìm thấy tin đăng
+
+    delete:
+      tags: [Listings]
+      summary: Xóa tin đăng
+      description: |
+        Xóa tin đăng phòng trọ
+
+        **Yêu cầu quyền:** Chỉ chủ sở hữu tin đăng hoặc Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          description: ID của tin đăng
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Xóa thành công (không có nội dung trả về)
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Không có quyền xóa tin đăng này
+        "404":
+          description: Không tìm thấy tin đăng
+
+  # ============================================================================
+  # PROFILE ENDPOINTS
+  # ============================================================================
+
+  /profile:
+    get:
+      tags: [Profile]
+      summary: Lấy thông tin cá nhân
+      description: Lấy thông tin profile của user hiện tại
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Thông tin profile
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/UserProfile"
+                  - $ref: "#/components/schemas/LandlordProfile"
+                  - $ref: "#/components/schemas/AdminProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Không tìm thấy profile
+
+    put:
+      tags: [Profile]
+      summary: Cập nhật thông tin cá nhân
+      description: Cập nhật thông tin profile của user hiện tại
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                  example: "Nguyen Van A"
+                phoneNumber:
+                  type: string
+                  example: "+84987654321"
+                businessName:
+                  type: string
+                  example: "Nha Tro ABC"
+                  description: "Chỉ dành cho landlords"
+                businessAddress:
+                  type: string
+                  example: "123 Nguyen Hue, Q1, TPHCM"
+                  description: "Chỉ dành cho landlords"
+      responses:
+        "200":
+          description: Cập nhật thành công
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ============================================================================
+  # FAVORITES ENDPOINTS
+  # ============================================================================
+
+  /favorites:
+    get:
+      tags: [Favorites]
+      summary: Lấy danh sách yêu thích
+      description: Lấy danh sách các phòng trọ đã lưu yêu thích
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Danh sách yêu thích
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Favorite"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /favorites/{listingId}:
+    post:
+      tags: [Favorites]
+      summary: Thêm vào yêu thích
+      description: Thêm phòng trọ vào danh sách yêu thích
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          description: ID của tin đăng
+          schema:
+            type: string
+            example: "12345678-1234-1234-1234-123456789012"
+      responses:
+        "201":
+          description: Đã thêm vào yêu thích
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Added to favorites"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    delete:
+      tags: [Favorites]
+      summary: Xóa khỏi yêu thích
+      description: Xóa phòng trọ khỏi danh sách yêu thích
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          description: ID của tin đăng
+          schema:
+            type: string
+            example: "12345678-1234-1234-1234-123456789012"
+      responses:
+        "200":
+          description: Đã xóa khỏi yêu thích
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Removed from favorites"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ============================================================================
+  # IMAGES ENDPOINTS
+  # ============================================================================
+
+  /images/upload-urls:
+    post:
+      tags: [Images]
+      summary: Tạo URL upload cho nhiều hình ảnh
+      description: |
+        Tạo presigned URLs để upload hình ảnh lên S3
+
+        **Yêu cầu quyền:** Chỉ Landlords hoặc Admins
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: object
+                    required: [fileName, contentType]
+                    properties:
+                      fileName:
+                        type: string
+                        example: "room1.jpg"
+                      contentType:
+                        type: string
+                        enum:
+                          ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+                        example: "image/jpeg"
+      responses:
+        "200":
+          description: URLs upload đã được tạo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  uploads:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        uploadUrl:
+                          type: string
+                          description: Presigned URL để upload (expires sau 1h)
+                          example: "https://s3.amazonaws.com/bucket/key?signature..."
+                        key:
+                          type: string
+                          description: S3 key của file
+                          example: "listings/userId/uuid-room1.jpg"
+                        publicUrl:
+                          type: string
+                          description: Public URL để truy cập sau khi upload
+                          example: "https://bucket.s3.region.amazonaws.com/listings/userId/uuid-room1.jpg"
+        "400":
+          description: Dữ liệu không hợp lệ hoặc quá nhiều files
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Không có quyền upload
+
+  /images/{key}:
+    delete:
+      tags: [Images]
+      summary: Xóa hình ảnh
+      description: |
+        Xóa hình ảnh khỏi S3
+
+        **Yêu cầu quyền:** Chỉ chủ sở hữu hoặc Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: S3 key của hình ảnh cần xóa
+          schema:
+            type: string
+            example: "listings/userId/uuid-room1.jpg"
+      responses:
+        "200":
+          description: Xóa hình ảnh thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Image deleted successfully"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Không có quyền xóa hình ảnh này
+        "500":
+          description: Lỗi khi xóa hình ảnh
+
+  # ============================================================================
+  # LOCATION ENDPOINTS
+  # ============================================================================
+
+  /location/search:
+    get:
+      tags: [Location]
+      summary: Tìm kiếm địa điểm theo tên
+      description: |
+        Tìm kiếm địa điểm theo tên khu vực hoặc địa chỉ cụ thể sử dụng Amazon Location Service
+
+        **Public endpoint** - Không cần đăng nhập
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Từ khóa tìm kiếm (tên khu vực, địa chỉ)
+          schema:
+            type: string
+            example: "Quận 1, TP.HCM"
+        - name: limit
+          in: query
+          description: Số lượng kết quả tối đa
+          schema:
+            type: integer
+            default: 10
+            example: 10
+      responses:
+        "200":
+          description: Danh sách địa điểm tìm được
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  results:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PlaceResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /location/reverse:
+    get:
+      tags: [Location]
+      summary: Lấy địa chỉ từ tọa độ
+      description: |
+        Chuyển đổi tọa độ thành địa chỉ (reverse geocoding)
+        
+        **Lưu ý:** Endpoint này trả về cấu trúc đơn giản để hiển thị. 
+        Để lấy cấu trúc phù hợp với tạo listing, dùng `/location/search`
+
+        **Public endpoint** - Không cần đăng nhập
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: Vĩ độ
+          schema:
+            type: number
+            example: 10.7769
+        - name: lng
+          in: query
+          required: true
+          description: Kinh độ
+          schema:
+            type: number
+            example: 106.7009
+      responses:
+        "200":
+          description: Thông tin địa chỉ (cấu trúc đơn giản)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  address:
+                    $ref: "#/components/schemas/AddressInfo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /location/places/{placeId}:
+    get:
+      tags: [Location]
+      summary: Lấy chi tiết địa điểm
+      description: |
+        Lấy thông tin chi tiết của một địa điểm theo PlaceId
+
+        **Public endpoint** - Không cần đăng nhập
+      parameters:
+        - name: placeId
+          in: path
+          required: true
+          description: ID của địa điểm từ Amazon Location Service
+          schema:
+            type: string
+            example: "AQIBAHjLzQkSAQAAXwAAACH4mX..."
+      responses:
+        "200":
+          description: Chi tiết địa điểm
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  place:
+                    $ref: "#/components/schemas/PlaceResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /location/routes:
+    post:
+      tags: [Location]
+      summary: Tính toán tuyến đường giữa hai điểm
+      description: |
+        Tính toán tuyến đường, khoảng cách và thời gian di chuyển giữa hai điểm sử dụng Amazon Location Service
+
+        **Public endpoint** - Không cần đăng nhập
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [origin, destination]
+              properties:
+                origin:
+                  type: array
+                  description: Tọa độ điểm xuất phát [longitude, latitude]
+                  items:
+                    type: number
+                  minItems: 2
+                  maxItems: 2
+                  example: [106.6903067, 10.8204916]
+                destination:
+                  type: array
+                  description: Tọa độ điểm đến [longitude, latitude]
+                  items:
+                    type: number
+                  minItems: 2
+                  maxItems: 2
+                  example: [106.68493, 10.81943]
+      responses:
+        "200":
+          description: Thông tin tuyến đường
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  route:
+                    type: object
+                    properties:
+                      distance:
+                        type: number
+                        description: Khoảng cách (km)
+                        example: 1.234
+                      duration:
+                        type: number
+                        description: Thời gian di chuyển (giây)
+                        example: 180
+                      geometry:
+                        type: object
+                        description: Hình học tuyến đường (GeoJSON LineString)
+                        properties:
+                          type:
+                            type: string
+                            example: "LineString"
+                          coordinates:
+                            type: array
+                            description: Mảng các tọa độ [longitude, latitude]
+                            items:
+                              type: array
+                              items:
+                                type: number
+                            example: [[106.6903067, 10.8204916], [106.69, 10.82], [106.68493, 10.81943]]
+                      steps:
+                        type: array
+                        description: Các bước trong tuyến đường
+                        items:
+                          type: object
+                          properties:
+                            distance:
+                              type: number
+                              description: Khoảng cách của bước này (km)
+                              example: 0.234
+                            duration:
+                              type: number
+                              description: Thời gian của bước này (giây)
+                              example: 45
+                            startPosition:
+                              type: array
+                              description: Tọa độ bắt đầu [longitude, latitude]
+                              items:
+                                type: number
+                              example: [106.6903067, 10.8204916]
+                            endPosition:
+                              type: array
+                              description: Tọa độ kết thúc [longitude, latitude]
+                              items:
+                                type: number
+                              example: [106.69, 10.82]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          description: Lỗi khi tính toán tuyến đường
+
+  # ============================================================================
+  # AI ENDPOINTS
+  # ============================================================================
+
+  /ai/search:
+    post:
+      tags: [AI]
+      summary: Tìm kiếm phòng thông minh bằng ngôn ngữ tự nhiên
+      description: |
+        🤖 **AI-Powered Smart Search** - Tìm kiếm thông minh với ngôn ngữ tự nhiên
+        
+        Sử dụng Amazon Bedrock (Claude 3 Sonnet) để:
+        - Phân tích yêu cầu bằng tiếng Việt tự nhiên
+        - Hiểu ngữ cảnh và ý nghĩa sâu xa
+        - Cá nhân hóa dựa trên favorites và profile (nếu đã login)
+        - Scoring thông minh dựa trên nhiều yếu tố
+        
+        **Ví dụ queries:**
+        - "Phòng 2-3 triệu gần trường FPT, yên tĩnh, có wifi"
+        - "Tìm phòng khu an ninh, nhiều chỗ ăn uống"
+        - "Phòng thuận tiện đi làm trung tâm"
+        
+        **Public endpoint** - Không cần đăng nhập (nhưng có login sẽ được cá nhân hóa)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                  description: Yêu cầu tìm phòng bằng tiếng Việt với ngôn ngữ tự nhiên
+                  example: "Tôi cần phòng gần khu an ninh, nhiều chỗ ăn uống, thuận tiện đi làm trung tâm"
+                userLocation:
+                  type: object
+                  description: Vị trí hiện tại của người dùng (tùy chọn)
+                  properties:
+                    latitude:
+                      type: number
+                      example: 10.7769
+                    longitude:
+                      type: number
+                      example: 106.7009
+      responses:
+        "200":
+          description: Kết quả tìm kiếm thông minh
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  query:
+                    type: string
+                    example: "Tôi cần tìm phòng trọ dưới 3 triệu"
+                  parsedRequirements:
+                    type: object
+                    description: Yêu cầu đã được AI phân tích bao gồm tiêu chí ngữ nghĩa
+                    properties:
+                      semanticCriteria:
+                        type: object
+                        properties:
+                          security:
+                            type: boolean
+                            description: Yêu cầu về an ninh
+                          foodAndDining:
+                            type: boolean
+                            description: Yêu cầu về ăn uống
+                  explanation:
+                    type: string
+                    example: "Dựa trên yêu cầu về khu vực an ninh và nhiều chỗ ăn uống, chúng tôi tìm thấy các phòng phù hợp..."
+                  recommendations:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/Listing"
+                        - type: object
+                          properties:
+                            relevanceScore:
+                              type: number
+                              example: 85
+                            distanceToWork:
+                              type: number
+                              example: 2.3
+                            areaContext:
+                              type: object
+                              description: Thông tin ngữ cảnh khu vực
+                              properties:
+                                securityScore:
+                                  type: number
+                                  example: 8
+                                restaurantCount:
+                                  type: number
+                                  example: 15
+                  totalFound:
+                    type: integer
+                    example: 5
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+
+
+  # ============================================================================
+  # SUPPORT ENDPOINTS
+  # ============================================================================
+
+  /support:
+    post:
+      tags: [Support]
+      summary: Tạo yêu cầu hỗ trợ
+      description: |
+        Tạo yêu cầu hỗ trợ (yêu cầu quyền landlord, góp ý, báo lỗi, etc.)
+
+        **Yêu cầu quyền:** Authenticated users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, message]
+              properties:
+                type:
+                  type: string
+                  enum:
+                    [
+                      LANDLORD_REQUEST,
+                      FEEDBACK,
+                      BUG_REPORT,
+                      FEATURE_REQUEST,
+                      GENERAL,
+                    ]
+                  default: GENERAL
+                  example: "LANDLORD_REQUEST"
+                subject:
+                  type: string
+                  example: "Yêu cầu quyền đăng tin"
+                message:
+                  type: string
+                  example: "Tôi muốn trở thành chủ trọ để đăng tin cho thuê phòng."
+      responses:
+        "201":
+          description: Tạo yêu cầu thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Support request created successfully"
+                  request:
+                    $ref: "#/components/schemas/SupportRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    get:
+      tags: [Support]
+      summary: Lấy danh sách yêu cầu hỗ trợ
+      description: |
+        Lấy tất cả yêu cầu hỗ trợ trong hệ thống
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Danh sách yêu cầu hỗ trợ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  requests:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SupportRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ============================================================================
+  # NOTIFICATIONS ENDPOINTS
+  # ============================================================================
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Lấy danh sách thông báo
+      description: |
+        Lấy tất cả thông báo của user hiện tại
+
+        **Yêu cầu quyền:** Authenticated users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Số lượng thông báo tối đa
+          schema:
+            type: integer
+            default: 20
+            example: 20
+      responses:
+        "200":
+          description: Danh sách thông báo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  notifications:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        notificationId:
+                          type: string
+                        type:
+                          type: string
+                          enum: [PRICE_CHANGE, STATUS_CHANGE, LANDLORD_INTEREST, WEEKLY_DIGEST]
+                          description: |
+                            - PRICE_CHANGE: Thông báo thay đổi giá phòng
+                            - STATUS_CHANGE: Thông báo cập nhật trạng thái phòng
+                            - LANDLORD_INTEREST: Thông báo có người quan tâm (cho landlord)
+                            - WEEKLY_DIGEST: Bản tin tổng hợp hàng tuần
+                        title:
+                          type: string
+                        message:
+                          type: string
+                        metadata:
+                          type: object
+                        isRead:
+                          type: boolean
+                        createdAt:
+                          type: string
+                  unreadCount:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/read-all:
+    put:
+      tags: [Notifications]
+      summary: Đánh dấu tất cả đã đọc
+      description: |
+        Đánh dấu tất cả thông báo là đã đọc
+
+        **Yêu cầu quyền:** Authenticated users
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Đã đánh dấu tất cả
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "All notifications marked as read"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /notifications/{notificationId}/read:
+    put:
+      tags: [Notifications]
+      summary: Đánh dấu đã đọc
+      description: |
+        Đánh dấu một thông báo là đã đọc
+
+        **Yêu cầu quyền:** Authenticated users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          description: ID của thông báo
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Đã đánh dấu
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Notification marked as read"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /support/{requestId}:
+    put:
+      tags: [Support]
+      summary: Cập nhật trạng thái yêu cầu hỗ trợ
+      description: |
+        Admin cập nhật trạng thái và phản hồi yêu cầu hỗ trợ
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: ID của yêu cầu hỗ trợ
+          schema:
+            type: string
+            example: "12345678-1234-1234-1234-123456789012"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum:
+                    [
+                      PENDING,
+                      APPROVED,
+                      REJECTED,
+                      RECEIVED,
+                      IN_PROGRESS,
+                      RESOLVED,
+                    ]
+                  example: "APPROVED"
+                adminResponse:
+                  type: string
+                  example: "Yêu cầu đã được phê duyệt. Quyền landlord đã được cấp."
+      responses:
+        "200":
+          description: Cập nhật thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Support request updated successfully"
+                  request:
+                    $ref: "#/components/schemas/SupportRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+
+
+  # ============================================================================
+  # ADMIN ENDPOINTS
+  # ============================================================================
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: Lấy danh sách tất cả users
+      description: |
+        Lấy danh sách tất cả users trong hệ thống với phân trang và lọc
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Số trang (bắt đầu từ 1)
+          schema:
+            type: integer
+            default: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Số lượng users mỗi trang
+          schema:
+            type: integer
+            default: 20
+            example: 20
+        - name: userType
+          in: query
+          description: Lọc theo loại user
+          schema:
+            type: string
+            enum: [user, landlord, admin]
+            example: "user"
+        - name: status
+          in: query
+          description: Lọc theo trạng thái
+          schema:
+            type: string
+            enum: [ENABLED, DISABLED]
+            example: "ENABLED"
+      responses:
+        "200":
+          description: Danh sách users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  users:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: "#/components/schemas/UserProfile"
+                        - $ref: "#/components/schemas/LandlordProfile"
+                        - $ref: "#/components/schemas/AdminProfile"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 150
+                      totalPages:
+                        type: integer
+                        example: 8
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/stats:
+    get:
+      tags: [Admin]
+      summary: Lấy thống kê hệ thống
+      description: |
+        Lấy thống kê tổng số người dùng, phòng trọ, và phòng đang hoạt động
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Thống kê hệ thống
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  stats:
+                    type: object
+                    properties:
+                      totalUsers:
+                        type: integer
+                        description: Tổng số người dùng
+                        example: 1250
+                      totalListings:
+                        type: integer
+                        description: Tổng số phòng trọ
+                        example: 450
+                      activeListings:
+                        type: integer
+                        description: Số phòng đang hoạt động (chưa hết hạn)
+                        example: 420
+                      usersByType:
+                        type: object
+                        description: Phân loại người dùng theo role
+                        properties:
+                          user:
+                            type: integer
+                            example: 1000
+                          landlord:
+                            type: integer
+                            example: 200
+                          admin:
+                            type: integer
+                            example: 50
+                      systemHealth:
+                        type: string
+                        description: Trạng thái hệ thống
+                        example: "OK"
+                      lastUpdated:
+                        type: string
+                        format: date-time
+                        description: Thời gian cập nhật thống kê
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/listings/{listingId}:
+    delete:
+      tags: [Admin]
+      summary: Xóa bài đăng vi phạm
+      description: |
+        Xóa các bài đăng vi phạm quy định
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: listingId
+          in: path
+          required: true
+          description: ID của tin đăng
+          schema:
+            type: string
+            example: "12345678-1234-1234-1234-123456789012"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  example: "Nội dung không phù hợp, hình ảnh không liên quan"
+                  description: "Lý do xóa bài đăng"
+      responses:
+        "200":
+          description: Xóa bài đăng thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Listing deleted successfully"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Không tìm thấy tin đăng
+
+  /admin/users/{userId}/role:
+    put:
+      tags: [Admin]
+      summary: Cập nhật quyền người dùng
+      description: |
+        Quản lý quyền (role) của người dùng
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: ID của user
+          schema:
+            type: string
+            example: "12345678-1234-1234-1234-123456789012"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [user, landlord, admin]
+                  example: "landlord"
+                  description: "Quyền mới của người dùng"
+      responses:
+        "200":
+          description: Cập nhật quyền thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "User role updated to landlord"
+                  user:
+                    type: object
+                    description: "Thông tin user đã cập nhật"
+        "400":
+          description: Quyền không hợp lệ
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Không tìm thấy user
+
+  /admin/users/{userId}/status:
+    put:
+      tags: [Admin]
+      summary: Cập nhật trạng thái user
+      description: |
+        Khóa hoặc mở khóa tài khoản user
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: ID của user
+          schema:
+            type: string
+            example: "12345678-1234-1234-1234-123456789012"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [ENABLED, DISABLED]
+                  example: "DISABLED"
+                  description: "ENABLED = mở khóa, DISABLED = khóa tài khoản"
+      responses:
+        "200":
+          description: Cập nhật trạng thái thành công
+        "400":
+          description: Trạng thái không hợp lệ
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Không tìm thấy user
+
+
+
+  /admin/system/cleanup-inactive-users:
+    post:
+      tags: [Admin]
+      summary: Xóa tài khoản không hoạt động
+      description: |
+        Xóa các tài khoản user không hoạt động quá 6 tháng (US-010)
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Xóa thành công
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/system/refresh-area-data:
+    post:
+      tags: [Admin]
+      summary: Làm mới dữ liệu khu vực
+      description: |
+        Làm mới thông tin ngữ cảnh khu vực cho các listing (US-040)
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Làm mới thành công
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/notifications/send-weekly-digest:
+    post:
+      tags: [Admin]
+      summary: Gửi bản tin hàng tuần
+      description: |
+        Gửi bản tin tổng hợp hàng tuần cho người dùng (US-050)
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Gửi thành công
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/analytics/popular-areas:
+    get:
+      tags: [Analytics]
+      summary: Thống kê khu vực phổ biến
+      description: |
+        Lấy thống kê các khu vực được tìm kiếm nhiều nhất (US-045)
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          description: Số ngày thống kê
+          schema:
+            type: integer
+            default: 7
+      responses:
+        "200":
+          description: Thống kê khu vực
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/analytics/users-by-area:
+    get:
+      tags: [Analytics]
+      summary: Thống kê người dùng theo khu vực
+      description: |
+        Thống kê số lượng người dùng theo khu vực (US-060)
+
+        **Yêu cầu quyền:** Chỉ Admins
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Thống kê người dùng
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /landlord/map-data:
+    get:
+      tags: [Landlord]
+      summary: Dữ liệu bản đồ cho chủ trọ
+      description: |
+        Lấy dữ liệu thị trường và bản đồ cho chủ trọ khi đăng tin (US-042)
+
+        **Yêu cầu quyền:** Chỉ Landlords hoặc Admins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: Vĩ độ
+          schema:
+            type: number
+        - name: lng
+          in: query
+          required: true
+          description: Kinh độ
+          schema:
+            type: number
+        - name: radius
+          in: query
+          description: Bán kính tìm kiếm (km)
+          schema:
+            type: number
+            default: 2
+      responses:
+        "200":
+          description: Dữ liệu bản đồ và thị trường
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Enums for data validation
+    DistrictEnum:
+      type: string
+      enum:
+        - "Quận 1"
+        - "Quận 2"
+        - "Quận 3"
+        - "Quận 4"
+        - "Quận 5"
+        - "Quận 6"
+        - "Quận 7"
+        - "Quận 8"
+        - "Quận 9"
+        - "Quận 10"
+        - "Quận 11"
+        - "Quận 12"
+        - "Quận Bình Thạnh"
+        - "Quận Gò Vấp"
+        - "Quận Phú Nhuận"
+        - "Quận Tân Bình"
+        - "Quận Tân Phú"
+        - "Quận Bình Tân"
+        - "Thành phố Thủ Đức"
+        - "Huyện Hóc Môn"
+        - "Huyện Củ Chi"
+        - "Huyện Bình Chánh"
+        - "Huyện Nhà Bè"
+        - "Huyện Cần Giờ"
+
+    AmenitiesEnum:
+      type: string
+      enum:
+        - "WiFi"
+        - "Điều hòa"
+        - "Tủ lạnh"
+        - "Máy giặt"
+        - "Bếp điện"
+        - "Nóng lạnh"
+        - "Ban công"
+        - "Cửa sổ"
+        - "Giường"
+        - "Tủ quần áo"
+        - "Bàn ghế"
+        - "Toilet riêng"
+        - "Bảo vệ 24/7"
+        - "Thang máy"
+        - "Chỗ để xe"
+        - "Gần chợ"
+        - "Gần trường học"
+        - "Gần bệnh viện"
+        - "Gần công viên"
+
+    UserTypeEnum:
+      type: string
+      enum: ["user", "landlord", "admin"]
+
+    UserStatusEnum:
+      type: string
+      enum: ["ENABLED", "DISABLED"]
+
+    SupportRequestTypeEnum:
+      type: string
+      enum:
+        [
+          "LANDLORD_REQUEST",
+          "FEEDBACK",
+          "BUG_REPORT",
+          "FEATURE_REQUEST",
+          "GENERAL",
+        ]
+
+    SupportRequestStatusEnum:
+      type: string
+      enum:
+        [
+          "PENDING",
+          "APPROVED",
+          "REJECTED",
+          "RECEIVED",
+          "IN_PROGRESS",
+          "RESOLVED",
+        ]
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation successful"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "BadRequest"
+        message:
+          type: string
+          example: "Invalid input data"
+
+    SupportRequest:
+      type: object
+      properties:
+        requestId:
+          type: string
+          example: "12345678-1234-1234-1234-123456789012"
+        userId:
+          type: string
+          example: "user-12345678-1234-1234-1234-123456789012"
+        type:
+          type: string
+          enum:
+            [LANDLORD_REQUEST, FEEDBACK, BUG_REPORT, FEATURE_REQUEST, GENERAL]
+          example: "LANDLORD_REQUEST"
+        subject:
+          type: string
+          example: "Yêu cầu quyền đăng tin"
+        message:
+          type: string
+          example: "Tôi muốn trở thành chủ trọ để đăng tin cho thuê phòng."
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, RECEIVED, IN_PROGRESS, RESOLVED]
+          example: "PENDING"
+        adminResponse:
+          type: string
+          nullable: true
+          example: "Yêu cầu đã được phê duyệt."
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T14:30:00Z"
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Authentication successful"
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        idToken:
+          type: string
+        expiresIn:
+          type: integer
+          example: 1800
+        tokenType:
+          type: string
+          example: "Bearer"
+
+    UserProfile:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: "12345678-1234-1234-1234-123456789012"
+        userType:
+          type: string
+          example: "user"
+        phoneNumber:
+          type: string
+          example: "+84987654321"
+        fullName:
+          type: string
+          example: "Nguyen Van A"
+        createdAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: string
+          format: date-time
+
+    LandlordProfile:
+      allOf:
+        - $ref: "#/components/schemas/UserProfile"
+        - type: object
+          properties:
+            userType:
+              type: string
+              example: "landlord"
+            businessName:
+              type: string
+              example: "Nha Tro ABC"
+            businessAddress:
+              type: string
+              example: "123 Nguyen Hue, Q1, TPHCM"
+
+    AdminProfile:
+      allOf:
+        - $ref: "#/components/schemas/UserProfile"
+        - type: object
+          properties:
+            userType:
+              type: string
+              example: "admin"
+            email:
+              type: string
+              example: "admin@example.com"
+
+    Listing:
+      type: object
+      properties:
+        listingId:
+          type: string
+          example: "12345678-1234-1234-1234-123456789012"
+        title:
+          type: string
+          example: "Phòng trọ đẹp gần trung tâm"
+        description:
+          type: string
+          example: "Phòng trọ sạch sẽ, đầy đủ tiện nghi"
+        price:
+          type: number
+          example: 3500000
+        area:
+          type: number
+          example: 25
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+              example: "123 Nguyen Hue"
+            ward:
+              type: string
+              example: "Phuong Ben Nghe"
+            district:
+              type: string
+              example: "Quan 1"
+            city:
+              type: string
+              example: "TP.HCM"
+        location:
+          type: object
+          properties:
+            latitude:
+              type: number
+              example: 10.7769
+            longitude:
+              type: number
+              example: 106.7009
+        images:
+          type: array
+          items:
+            type: string
+            example: "https://bucket.s3.region.amazonaws.com/listings/userId/uuid-room1.jpg"
+        amenities:
+          type: array
+          items:
+            type: string
+          example: ["WiFi", "Điều hòa", "Tủ lạnh"]
+        ownerId:
+          type: string
+          example: "12345678-1234-1234-1234-123456789012"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateListingRequest:
+      type: object
+      required: [title, description, address, location, price, area]
+      properties:
+        title:
+          type: string
+          minLength: 10
+          maxLength: 100
+          example: "Phòng trọ đẹp gần trung tâm"
+        description:
+          type: string
+          minLength: 20
+          maxLength: 1000
+          example: "Phòng trọ sạch sẽ, đầy đủ tiện nghi"
+        price:
+          type: number
+          minimum: 500000
+          maximum: 50000000
+          example: 3500000
+        area:
+          type: number
+          minimum: 10
+          maximum: 200
+          example: 25
+        address:
+          type: object
+          required: [street, ward, district, city]
+          properties:
+            street:
+              type: string
+              minLength: 5
+              maxLength: 100
+              example: "123 Nguyen Hue"
+            ward:
+              type: string
+              minLength: 5
+              maxLength: 50
+              example: "Phuong Ben Nghe"
+            district:
+              $ref: "#/components/schemas/DistrictEnum"
+              example: "Quận 1"
+            city:
+              type: string
+              enum: ["TP.HCM", "Hà Nội", "Đà Nẵng", "Cần Thơ"]
+              example: "TP.HCM"
+        location:
+          type: object
+          required: [latitude, longitude]
+          properties:
+            latitude:
+              type: number
+              minimum: 8.0
+              maximum: 24.0
+              example: 10.7769
+            longitude:
+              type: number
+              minimum: 102.0
+              maximum: 110.0
+              example: 106.7009
+        images:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: string
+            format: uri
+          example:
+            [
+              "https://bucket.s3.region.amazonaws.com/listings/userId/uuid-room1.jpg",
+            ]
+        amenities:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/AmenitiesEnum"
+          example: ["WiFi", "Điều hòa", "Tủ lạnh"]
+
+    UpdateListingRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          example: "Phòng trọ đẹp gần trung tâm"
+        description:
+          type: string
+          example: "Phòng trọ sạch sẽ, đầy đủ tiện nghi"
+        price:
+          type: number
+          example: 3500000
+        area:
+          type: number
+          example: 25
+        images:
+          type: array
+          items:
+            type: string
+          example:
+            [
+              "https://bucket.s3.region.amazonaws.com/listings/userId/uuid-room1.jpg",
+            ]
+        amenities:
+          type: array
+          items:
+            type: string
+          example: ["WiFi", "Điều hòa", "Tủ lạnh"]
+
+    Favorite:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: "12345678-1234-1234-1234-123456789012"
+        listingId:
+          type: string
+          example: "12345678-1234-1234-1234-123456789012"
+        createdAt:
+          type: string
+          format: date-time
+
+    PlaceResult:
+      type: object
+      properties:
+        placeId:
+          type: string
+          example: "AQIBAHjLzQkSAQAAXwAAACH4mX..."
+        label:
+          type: string
+          example: "Quận 1, TP.HCM"
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+              example: "123 Nguyen Hue"
+            ward:
+              type: string
+              example: "Phường Bến Nghé"
+            district:
+              type: string
+              example: "Quận 1"
+            city:
+              type: string
+              example: "Ho Chi Minh City"
+        location:
+          type: object
+          properties:
+            latitude:
+              type: number
+              example: 10.7769
+            longitude:
+              type: number
+              example: 106.7009
+
+    AddressInfo:
+      type: object
+      properties:
+        address:
+          type: string
+          example: "123 Nguyen Hue"
+        ward:
+          type: string
+          example: "Phuong Ben Nghe"
+        district:
+          type: string
+          example: "Quận 1"
+        city:
+          type: string
+          example: "TP.HCM"
+        country:
+          type: string
+          example: "Vietnam"
+
+  responses:
+    BadRequest:
+      description: Dữ liệu đầu vào không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Unauthorized:
+      description: Không có quyền truy cập - cần đăng nhập
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Forbidden:
+      description: Không có quyền thực hiện hành động này
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: Không tìm thấy tài nguyên
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

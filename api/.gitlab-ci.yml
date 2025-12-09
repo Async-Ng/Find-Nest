@@ -1,0 +1,130 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  AWS_DEFAULT_REGION: us-east-1
+  NODE_VERSION: "20"
+  STACK_NAME: "FindNestBackendStack"
+  NPM_CACHE: ".npm"
+
+# Reusable cache block
+.cache_config: &cache_config
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .npm/
+    - backend/src/lambda/node_modules/
+    - cdk/node_modules/
+  policy: pull-push
+
+# Reusable Node.js Job Template
+.node_job_template: &node_base
+  image: node:${NODE_VERSION}-alpine
+  cache: *cache_config
+  before_script:
+    - apk add --no-cache git
+    - npm config set cache $NPM_CACHE
+
+# ===========================
+#  BUILD LAMBDA
+# ===========================
+build:lambda:
+  <<: *node_base
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - cd backend/src/lambda
+    - npm ci --prefer-offline --omit=dev
+    - npm prune --omit=dev
+    - rm -rf coverage/ .nyc_output/ *.test.js
+  artifacts:
+    paths:
+      - backend/src/lambda/
+    exclude:
+      - backend/src/lambda/.env*
+      - backend/src/lambda/node_modules/.cache/
+    expire_in: 1 hour
+
+# ===========================
+#  BUILD CDK INFRASTRUCTURE
+# ===========================
+build:infrastructure:
+  <<: *node_base
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  dependencies:
+    - build:lambda
+  script:
+    - cd cdk
+    - npm ci --prefer-offline
+    - npm run build
+    - npx cdk synth --all
+  artifacts:
+    paths:
+      - cdk/cdk.out/
+      - backend/src/lambda/
+    expire_in: 1 hour
+
+# ===========================
+#  DEPLOY
+# ===========================
+deploy:production:
+  image: node:${NODE_VERSION}-alpine
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+      allow_failure: false
+  needs:
+    - job: build:lambda
+      artifacts: true
+    - job: build:infrastructure
+      artifacts: true
+
+  before_script:
+    - apk add --no-cache aws-cli git
+    - |
+      echo "🔍 Validating AWS credentials..."
+      if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+        echo "❌ ERROR: AWS credentials missing"
+        exit 1
+      fi
+    - aws sts get-caller-identity || (echo "❌ Invalid AWS credentials" && exit 1)
+    - cd cdk && npm ci --prefer-offline
+
+  script:
+    - echo "📋 Running CDK diff..."
+    - npx cdk diff --all > diff.txt 2>&1 || true
+
+    - |
+      if grep -q "There were no differences" diff.txt; then
+        echo "ℹ️ No infra changes detected – deploying Lambda only..."
+        npx cdk deploy --all --require-approval never --ci
+      else
+        echo "🏗️ Infrastructure changes found:"
+        cat diff.txt
+        echo "🚀 Deploying all stacks..."
+        npx cdk deploy --all --require-approval never --ci --progress events
+      fi
+
+  after_script:
+    - |
+      if [ "$CI_JOB_STATUS" = "success" ]; then
+        echo "✅ Deployment successful"
+        aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].Outputs' || true
+      else
+        echo "❌ Deployment failed – showing recent events"
+        aws cloudformation describe-stack-events --stack-name $STACK_NAME --max-items 10 || true
+      fi
+
+  environment:
+    name: production
+    url: https://console.aws.amazon.com/cloudformation/home?region=$AWS_DEFAULT_REGION#/stacks
+
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - api_failure

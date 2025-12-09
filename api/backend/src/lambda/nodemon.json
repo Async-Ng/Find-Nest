@@ -1,0 +1,6 @@
+{
+  "watch": ["api", "*.js"],
+  "ignore": ["node_modules", "*.test.js", "coverage"],
+  "ext": "js,json",
+  "delay": 1000
+}

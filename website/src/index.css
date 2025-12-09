@@ -1,0 +1,363 @@
+@import "tailwindcss";
+
+/* ============ Global Animations ============ */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+  20%, 40%, 60%, 80% { transform: translateX(6px); }
+}
+
+@keyframes moveGrid {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(50px, 50px); }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blob {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+@keyframes floatingHouse {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.1;
+  }
+  50% {
+    transform: translateY(-20px) rotate(5deg);
+    opacity: 0.15;
+  }
+}
+
+@keyframes floatingHouse2 {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.08;
+  }
+  50% {
+    transform: translateY(-30px) rotate(-3deg);
+    opacity: 0.12;
+  }
+}
+
+@keyframes floatingHouse3 {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.1;
+  }
+  50% {
+    transform: translateY(-25px) rotate(4deg);
+    opacity: 0.14;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: translateX(0) translateY(0);
+  }
+  50% {
+    transform: translateX(50px) translateY(-10px);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out;
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+.animate-floatingHouse {
+  animation: floatingHouse 6s ease-in-out infinite;
+}
+
+.animate-floatingHouse2 {
+  animation: floatingHouse2 8s ease-in-out infinite;
+}
+
+.animate-floatingHouse3 {
+  animation: floatingHouse3 7s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 3s infinite;
+}
+
+.animate-wave {
+  animation: wave 3s ease-in-out infinite;
+}
+
+/* Premium Floating Particles */
+@keyframes floatingParticle {
+  0% {
+    transform: translateY(100vh) translateX(0) rotate(0deg) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(100px) rotate(360deg) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes floatingParticle2 {
+  0% {
+    transform: translateY(100vh) translateX(0) rotate(0deg) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(-80px) rotate(-360deg) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes floatingParticle3 {
+  0% {
+    transform: translateY(100vh) translateX(0) rotate(0deg) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(120px) rotate(180deg) scale(0);
+    opacity: 0;
+  }
+}
+
+/* Organic morph animation */
+@keyframes organicMorph {
+  0%, 100% {
+    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  }
+  25% {
+    border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%;
+  }
+  50% {
+    border-radius: 70% 30% 40% 60% / 30% 70% 60% 40%;
+  }
+  75% {
+    border-radius: 40% 70% 30% 60% / 70% 40% 60% 30%;
+  }
+}
+
+/* Spiral orbit */
+@keyframes spiralOrbit {
+  0% {
+    transform: translateX(0) translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateX(40px) translateY(-40px) rotate(90deg);
+  }
+  50% {
+    transform: translateX(0) translateY(-80px) rotate(180deg);
+  }
+  75% {
+    transform: translateX(-40px) translateY(-40px) rotate(270deg);
+  }
+  100% {
+    transform: translateX(0) translateY(0) rotate(360deg);
+  }
+}
+
+/* Radiant expand */
+@keyframes radiantExpand {
+  0%, 100% {
+    transform: scale(0.8);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.7;
+  }
+}
+
+/* Dancing gradient */
+@keyframes dancingGradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Glowing line */
+@keyframes glowingLine {
+  0%, 100% {
+    opacity: 0.2;
+    filter: blur(2px);
+  }
+  50% {
+    opacity: 0.8;
+    filter: blur(8px);
+  }
+}
+
+.animate-floatingParticle {
+  animation: floatingParticle 8s ease-out infinite;
+}
+
+.animate-floatingParticle2 {
+  animation: floatingParticle2 10s ease-out infinite;
+}
+
+.animate-floatingParticle3 {
+  animation: floatingParticle3 12s ease-out infinite;
+}
+
+.animate-organicMorph {
+  animation: organicMorph 8s ease-in-out infinite;
+}
+
+.animate-spiralOrbit {
+  animation: spiralOrbit 6s linear infinite;
+}
+
+.animate-radiantExpand {
+  animation: radiantExpand 5s ease-in-out infinite;
+}
+
+.animate-dancingGradient {
+  animation: dancingGradient 8s ease infinite;
+}
+
+.animate-glowingLine {
+  animation: glowingLine 4s ease-in-out infinite;
+}
+
+.animation-delay-1000 {
+  animation-delay: 1s;
+}
+
+.animation-delay-3000 {
+  animation-delay: 3s;
+}
+
+.animation-delay-5000 {
+  animation-delay: 5s;
+}
+
+.animation-delay-6000 {
+  animation-delay: 6s;
+}
+
+.animation-delay-7000 {
+  animation-delay: 7s;
+}
+
+/* MapLibre GL Styles */
+.maplibregl-canvas-container {
+  @apply w-full h-full;
+}
+
+.maplibregl-canvas {
+  @apply w-full h-full;
+}
+
+.maplibregl-popup-content {
+  @apply p-3 rounded-lg shadow-lg;
+}
+
+.maplibregl-popup-close-button {
+  @apply text-gray-600 hover:text-gray-900;
+}
